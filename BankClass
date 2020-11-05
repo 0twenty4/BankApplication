@@ -1,0 +1,444 @@
+package bank;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.io.File;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.io.FileReader;
+
+public class Bank {
+    private static final File database=new File("E://Projects//Bank//Database");
+    private static final BufferedReader input=new BufferedReader(new InputStreamReader(System.in));
+    private static final ArrayList<BankAccount> bankAccounts=new ArrayList<>();
+    private static BankAccount currentBankAccount;
+    private static int command;
+
+    static {
+        database.mkdir();
+        File[] accountDataFiles = database.listFiles();
+        if (accountDataFiles.length > 0) {
+            try {
+                for (File accountDataFile : accountDataFiles) {
+                    BufferedReader databaseReader = new BufferedReader(new FileReader(accountDataFile));
+                    BankAccount account = new BankAccount();
+                    account.login = databaseReader.readLine();
+                    account.password = databaseReader.readLine();
+                    account.databaseFile = accountDataFile;
+                    try {
+                        while (true) {
+                            account.card=new Card();
+                            account.card.number = databaseReader.readLine();
+                            account.card.cvc = databaseReader.readLine();
+                            account.card.balance = Integer.parseInt(databaseReader.readLine());
+                            account.cards.add(account.card);
+                        }
+                    } catch (Exception e) {} finally {
+                        databaseReader.close();
+                        bankAccounts.add(account);
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Unexpected error\n" + e.getClass().getName());
+            }
+        }
+    }
+
+    public static void openApplication() throws IOException, InterruptedException {
+        while (command != 3) {
+            System.out.println("""
+                    Bank
+                    1. Log in
+                    2. Create new Account
+                    3. Exit
+                    """);
+            command = Integer.parseInt(input.readLine());
+
+            switch (command) {
+                case (1):
+                    logIn();
+                    mainMenu();
+                    break;
+                case (2):
+                    createNewAccount();
+                    update();
+                    mainMenu();
+                    break;
+                case (3):
+            }
+        }
+    }
+
+    private static void mainMenu() throws IOException, InterruptedException {
+        while (command != 7) {
+            System.out.println("""
+                    1. Tie a card to account
+                    2. My cards
+                    3. Money to card
+                    4. Money from card
+                    5. News
+                    7. Exit""");
+            command = Integer.parseInt(input.readLine());
+
+            switch (command) {
+                case (1):
+                    tieCard();
+                    update();
+                    break;
+                case (2):
+                    myCards(0, false);
+                    break;
+                case(3):
+                    moneyToCard();
+                    update();
+                    break;
+                case (4):
+                    moneyFromCard();
+                    update();
+                    break;
+                case (5):
+                    System.out.println("Such interesting that wont fit in the console");
+                    System.out.println("1. exit");
+                    while (true) {
+                        if (Integer.parseInt(input.readLine()) == 1) break;
+                    }
+                    break;
+                case (7):
+                    break;
+            }
+        }
+    }
+
+    private static void createNewAccount() throws IOException {
+        BankAccount bankAccount = new BankAccount();
+
+        String inputLogin;
+        boolean isInputLoginUnique = true;
+        if (!bankAccounts.isEmpty()) {
+            while (true) {
+                System.out.println("New Login");
+                inputLogin = input.readLine();
+                for (BankAccount account : bankAccounts) {
+                    if (inputLogin.equals(account.login)) {
+                        isInputLoginUnique = false;
+                        break;
+                    }
+                }
+                if (isInputLoginUnique) break;
+                System.out.println("""
+                        Account with such Login already exists
+                        Please, enter another one
+                        """);
+                isInputLoginUnique=true;
+            }
+        } else {
+            System.out.println("New Login");
+            inputLogin = input.readLine();
+        }
+        bankAccount.login = inputLogin;
+
+        String inputPassword;
+        boolean passwordHasNumber = false;
+        boolean passwordHasLetter = false;
+        boolean isPasswordCorrect = false;
+        System.out.println("""
+                New Password
+                Requirements: at least 8 characters including numbers and letters. Special symbols are allowed
+                """);
+        while (true) {
+            inputPassword = input.readLine();
+            if (inputPassword.length() >= 8) {
+                for (char symbol : inputPassword.toCharArray()) {
+                    if (Character.isDigit(symbol)) {
+                        passwordHasNumber = true;
+                        if (passwordHasLetter) {
+                            isPasswordCorrect = true;
+                            break;
+                        }
+                    }
+                    if (Character.isLetter(symbol)) {
+                        passwordHasLetter = true;
+                        if (passwordHasNumber) {
+                            isPasswordCorrect = true;
+                            break;
+                        }
+                    }
+                }
+                if (isPasswordCorrect) break;
+                else if (passwordHasNumber && !passwordHasLetter) {
+                    System.out.println("""
+                            Password does not have letters
+                            Please, enter password matching requirements
+                            """);
+                    passwordHasNumber=false;
+                } else if (passwordHasLetter && !passwordHasNumber) {
+                    System.out.println("""
+                            Password does not have numbers
+                            Please, enter password matching requirements
+                            """);
+                    passwordHasLetter=false;
+                } else System.out.println("""
+                        Password has neither numbers nor letters
+                        Please, enter password matching requirements
+                        """);
+            } else System.out.println("""
+                    Password is less than 8 characters
+                    Please, enter password matching requirements
+                    """);
+        }
+        System.out.println("Please, repeat your password");
+        while (true) {
+            if (input.readLine().equals(inputPassword)) {
+                break;
+            }
+            System.out.println("""
+                        Passwords does not match to each other.
+                        """);
+        }
+        bankAccount.password=inputPassword;
+
+        System.out.println("""
+                New Account has been created successfully
+                """);
+        int number=database.listFiles().length+1;
+        bankAccount.databaseFile =new File(database.getPath()+"//Account"+(number)+".txt");
+        bankAccounts.add(bankAccount);
+        currentBankAccount=bankAccount;
+    }
+
+    private static void logIn() throws IOException {
+        String inputLogin;
+        String inputPassword;
+        boolean isInputDataCorrect=false;
+        while (true) {
+            System.out.println("Login");
+            inputLogin=input.readLine();
+            System.out.println("Password");
+            inputPassword=input.readLine();
+            for (BankAccount account : bankAccounts) {
+                if (inputLogin.equals(account.login))
+                    if (inputPassword.equals(account.password)) {
+                        isInputDataCorrect = true;
+                        currentBankAccount=account;
+                        break;
+                    }
+            }
+            if (isInputDataCorrect) break;
+            System.out.println("Such Account does not exists");
+        }
+        System.out.println("Hello, "+currentBankAccount.login);
+
+    }
+
+    private static void tieCard() throws IOException {
+        String inputCardNumber;
+        String inputCardCVC;
+        System.out.println("Card number");
+        inputCardNumber=input.readLine();
+        while (true) {
+            if (inputCardNumber.length() == 9) {
+                System.out.println("CVC");
+                inputCardCVC = input.readLine();
+                if (inputCardCVC.length() == 3) {
+                    System.out.println("Balance");
+                    currentBankAccount.card = new Card();
+                    currentBankAccount.card.number = inputCardNumber;
+                    currentBankAccount.card.cvc = inputCardCVC;
+                    currentBankAccount.card.balance = Integer.parseInt(input.readLine());
+                    currentBankAccount.cards.add(currentBankAccount.card);
+                    break;
+                } else System.out.println("Such card does not exists");
+            } else System.out.println("Such card does not exists");
+        }
+        System.out.println("Card has been tied successfully");
+    }
+
+    private static void myCards(int skipCardNumber, boolean helpCall) throws IOException {
+        int number=1;
+        for (Card card: currentBankAccount.cards) {
+            if (number == skipCardNumber) {
+                continue;
+            }
+            System.out.println(number + """
+                                      
+                    Number""" + " " + card.number + """
+                                        
+                    CVC""" + " " + card.cvc + """
+                                        
+                    Balance""" + " " + card.balance + """
+                                        
+                    """);
+            number++;
+        }
+        if (!helpCall) {
+            System.out.println("1. Exit");
+            while (true) {
+                command = Integer.parseInt(input.readLine());
+                if (command == 1) break;
+            }
+        }
+    }
+
+    private static void anotherAccountCards(BankAccount account) {
+        int number=1;
+        for (Card card : account.cards) {
+            System.out.println(number+
+                    """
+                    
+                    Number: """+" "+card.number);
+        }
+    }
+
+    private static void moneyToCard() throws IOException, InterruptedException {
+        System.out.println("""
+                1. My card
+                2. Another user card
+                """);
+        command = Integer.parseInt(input.readLine());
+        Card chosenPayCard;
+        int amountOfMoney;
+        switch (command) {
+            case (1):
+                System.out.println("""
+                        1. From my card
+                        2. Directly
+                        """);
+                command = Integer.parseInt(input.readLine());
+                switch (command) {
+                    case (1):
+                        System.out.println("Choose card to pay");
+                        myCards(0, true);
+                        command = Integer.parseInt(input.readLine());
+                        chosenPayCard = currentBankAccount.cards.get(command - 1);
+                        int indexOfChosenCard = command - 1;
+                        currentBankAccount.cards.remove(indexOfChosenCard);
+                        System.out.println("Choose card to be paid");
+                        myCards(command, true);
+                        command = Integer.parseInt(input.readLine());
+                        System.out.println("Desired amount of money");
+                        amountOfMoney = Integer.parseInt(input.readLine());
+                        System.out.println("Please, wait. Operation is being processed");
+                        chosenPayCard.balance -= amountOfMoney;
+                        currentBankAccount.cards.get(command - 1).balance += amountOfMoney;
+                        currentBankAccount.cards.add(indexOfChosenCard, chosenPayCard);
+                        Thread.sleep(3000);
+                        System.out.println("Operation has been completed successfully");
+                        break;
+                    case (2):
+                        System.out.println("Choose card to be paid");
+                        myCards(0, true);
+                        command = Integer.parseInt(input.readLine());
+                        System.out.println("Desired amount of money");
+                        currentBankAccount.cards.get(command - 1).balance += Integer.parseInt(input.readLine());
+                        System.out.println("Please, wait. Operation is being processed");
+                        Thread.sleep(3000);
+                        System.out.println("Operation has been completed successfully");
+                }
+                break;
+            case (2):
+                String inputData;
+                System.out.println("Choose card to pay");
+                myCards(0, true);
+                command = Integer.parseInt(input.readLine());
+                chosenPayCard = currentBankAccount.cards.get(command - 1);
+                System.out.println("""
+                        1. Number of card 
+                        2. Login of user""");
+                command = Integer.parseInt(input.readLine());
+                switch (command) {
+                    case (1):
+                        System.out.println("Number of card");
+                        inputData = input.readLine();
+                        boolean cardFound = false;
+                        System.out.println("Desired amount of money");
+                        amountOfMoney = Integer.parseInt(input.readLine());
+                        for (BankAccount account : bankAccounts) {
+                            for (Card card : account.cards) {
+                                if (inputData.equals(card.number)) {
+                                    cardFound = true;
+                                    card.balance += amountOfMoney;
+                                    break;
+                                }
+                            }
+                            if (cardFound) break;
+                        }
+                        System.out.println("Please, wait. Operation is being processed");
+                        chosenPayCard.balance -= amountOfMoney;
+                        Thread.sleep(3000);
+                        System.out.println("Operation has been completed successfully");
+                        break;
+                    case (2):
+                        boolean userFound = false;
+                        while (true) {
+                            System.out.println("Login of user");
+                            inputData = input.readLine();
+                            for (BankAccount account : bankAccounts) {
+                                if (inputData.equals(account.login)) {
+                                    userFound = true;
+                                    System.out.println("Choose card to be paid");
+                                    anotherAccountCards(account);
+                                    command=Integer.parseInt(input.readLine());
+                                    System.out.println("Desired amount of money");
+                                    amountOfMoney=Integer.parseInt(input.readLine());
+                                    System.out.println("Please, wait. Operation is being processed");
+                                    chosenPayCard.balance -= amountOfMoney;
+                                    account.cards.get(command-1).balance += amountOfMoney;
+                                    Thread.sleep(3000);
+                                    System.out.println("Operation has been completed successfully");
+                                    break;
+                                }
+                            }
+                            if (userFound) break;
+                            System.out.println("Such user does not exists");
+                        }
+                }
+        }
+    }
+
+    private static void update() throws IOException {
+        PrintWriter databaseFiller;
+        for (BankAccount account: bankAccounts) {
+            databaseFiller=new PrintWriter(new BufferedWriter(new FileWriter(account.databaseFile)));
+            databaseFiller.println(account.login);
+            databaseFiller.println(account.password);
+            try {
+                for (Card card: account.cards) {
+                    databaseFiller.println(card.number);
+                    databaseFiller.println(card.cvc);
+                    databaseFiller.println(card.balance);
+                }
+            } catch (Exception e) {} finally {
+                databaseFiller.close();
+            }
+        }
+    }
+
+    private static void moneyFromCard() throws IOException, InterruptedException {
+        System.out.println("Choose card");
+        myCards(0, true);
+        command = Integer.parseInt(input.readLine());
+        System.out.println("Desired amount of money");
+        currentBankAccount.cards.get(command - 1).balance -= Integer.parseInt(input.readLine());
+        System.out.println("Please, wait. Operation is being processed");
+        Thread.sleep(3000);
+        System.out.println("Operation has been completed successfully");
+    }
+
+
+    static class BankAccount {
+        String login;
+        String password;
+        Card card;
+        ArrayList<Card> cards=new ArrayList<>();
+        File databaseFile;
+    }
+
+    static class Card {
+        String number;
+        String cvc;
+        int balance;
+    }
+}
